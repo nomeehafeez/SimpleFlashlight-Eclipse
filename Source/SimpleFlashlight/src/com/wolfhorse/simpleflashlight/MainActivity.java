@@ -1,6 +1,7 @@
 package com.wolfhorse.simpleflashlight;
 
 import java.io.IOException;
+
 import android.support.v7.app.ActionBarActivity;
 import android.support.v4.app.Fragment;
 import android.app.AlertDialog;
@@ -19,11 +20,13 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.ToggleButton;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 
 /**
  * @author TimSexton
- * June 30, 2014
- * @version 1.3
+ * July 15, 2014
+ * @version 1.4
  * 
  */
 
@@ -35,7 +38,7 @@ public class MainActivity extends ActionBarActivity implements Callback {
 	private ToggleButton mButton;
 	private SurfaceView mPreview = null;
 	private SurfaceHolder mHolder = null;
-	private boolean mHasRequiredHardware = false;
+	private Animation mAnimScale = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,53 +54,94 @@ public class MainActivity extends ActionBarActivity implements Callback {
         }
         
         // Verify our required hardware exists on this device.
-        mHasRequiredHardware = (isCameraSupported() == true && isFlashSupported() == true);
+        isCameraSupported();
+        isFlashSupported();
+
+        // Setup button animation to zoom out and in when clicked
+        // to give the user more visual button click feedback.
+        mAnimScale = AnimationUtils.loadAnimation(this, R.animator.anim_scale);    
+        	        
+    }
+    
+    @Override
+    protected void onDestroy() {
+    	super.onDestroy();
+    	mAnimScale = null;
+    	mPackageManager = null;
     }
     
     @Override
     protected void onStart() {
     	super.onStart();
     	
-        if(mHasRequiredHardware)
-        {
-			if (mCamera == null)
-				mCamera = Camera.open();
-			
-			if (mPreview == null)
-				mPreview = (SurfaceView) findViewById(R.id.preview1);
-			
-	    	if (mPreview != null)
-	    		mHolder = mPreview.getHolder();
-	
-	    	if (mHolder != null)
-	    		mHolder.addCallback(this);
-	    	
-			if(mButton == null)
-				mButton = (ToggleButton) findViewById(R.id.toggleButton1);
-	
-	    	if (mButton != null)
-	    		mButton.bringToFront();
-	    	
-	    	// Default the light to ON
-	    	toggleFlashlight(true);
-        }
+        if (mPreview == null)
+        	mPreview = (SurfaceView) findViewById(R.id.preview1);
+    	
+    	if (mPreview != null)
+    		mHolder = mPreview.getHolder();
+    	
+    	if (mHolder != null)
+    		mHolder.addCallback(this);
+    	
+    	if (mButton == null)
+    		mButton = (ToggleButton) findViewById(R.id.toggleButton1);
+    	
+		if (mButton != null)
+		{
+			mButton.bringToFront();
+			mButton.setOnClickListener(new View.OnClickListener() {
+		        @Override
+		        public void onClick(View view) {
+		        	// Turn the flashlight on/off
+		        	view.startAnimation(mAnimScale);
+		        	toggleFlash(mButton.isChecked());
+		        }
+		    });
+		}
     }
     
     @Override
     protected void onStop() {
     	super.onStop();
-
-    	if (mCamera != null)
-    	{
-    		mCamera.release();
-    		mCamera = null;
-    	}
-    	
+    	   	  	
 		if (mHolder != null)
 			mHolder.removeCallback(this);
+		
 		mHolder = null;
 		mPreview = null;
-		mButton = null;
+    }
+    
+    @Override
+    protected void onResume()
+    {
+    	OpenCamera();    	
+    	
+		// Default the light to the ToggleButton's check state. (ON by default).
+    	// This will reset to the default if the user closes the app with the back button, but not when switching apps.
+    	if (mButton != null)
+    		toggleFlash(mButton.isChecked());
+    	
+    	super.onResume();
+    }
+    
+    @Override
+    protected void onPause()
+    {
+    	CloseCamera();
+    	super.onPause();
+    }
+    
+    private void CloseCamera(){
+        if (mCamera != null)
+        {
+            mCamera.release();
+            mCamera = null;
+        }
+    }
+    
+    private void OpenCamera(){
+    	CloseCamera();
+    	mCamera = Camera.open();
     }
     
     /**
@@ -155,40 +199,31 @@ public class MainActivity extends ActionBarActivity implements Callback {
      }
      return false;
     }
-    
-    public void toggleButton1_onClick(View view)
+     
+    /**
+     * Toggles the camera's flash.
+     * @param turnLightOn
+     */
+    private void toggleFlash(boolean turnLightOn)
     {
-    	// Turn the flashlight on/off
-    	boolean lightOn = ((ToggleButton) view).isChecked();
-  		toggleFlashlight(lightOn);
-    }
-    
-    private void toggleFlashlight(boolean turnLightOn)
-    {
-    	if (mHasRequiredHardware)
-    	{
-			if (mCamera != null)
-			{
-	    		if(mButton != null)
-	    			mButton.setChecked(turnLightOn);
-	    		
-				final Parameters p = mCamera.getParameters();
-		    	if(turnLightOn)
-		    	{
-			    	p.setFlashMode(Parameters.FLASH_MODE_TORCH);
-			    	mCamera.setParameters(p);
-			    	mCamera.startPreview();
-					Log.i("info", "flashlight turned on!");
-		    	}
-		    	else
-		    	{
-		    	    p.setFlashMode(Parameters.FLASH_MODE_OFF);
-		    	    mCamera.setParameters(p);
-		    		mCamera.stopPreview();
-		    		Log.i("info", "flashlight turned off!");
-		    	}
-			}
-    	}
+		if (mCamera != null)
+		{
+			final Parameters paramaters = mCamera.getParameters();
+	    	if(turnLightOn)
+	    	{
+				paramaters.setFlashMode(Parameters.FLASH_MODE_TORCH);
+		    	mCamera.setParameters(paramaters);
+	    		mCamera.startPreview();
+				Log.i("info", "Flash is ON...");
+	    	}
+	    	else
+	    	{
+				paramaters.setFlashMode(Parameters.FLASH_MODE_OFF);
+		    	mCamera.setParameters(paramaters);
+    	    	mCamera.stopPreview();
+	    		Log.i("info", "Flash is OFF...");
+	    	}
+		}
     }
     
     /**
@@ -201,13 +236,16 @@ public class MainActivity extends ActionBarActivity implements Callback {
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container,
                 Bundle savedInstanceState) {
+        	super.onCreateView(inflater, container, savedInstanceState);
+        	
             View rootView = inflater.inflate(R.layout.fragment_main, container, false);
             return rootView;
         }
     }
 
 	@Override
-	public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+	public void surfaceChanged(SurfaceHolder holder, int format, int width,
+			int height) {
 		// TODO Auto-generated method stub
 	}
 
@@ -228,14 +266,6 @@ public class MainActivity extends ActionBarActivity implements Callback {
 	@Override
 	public void surfaceDestroyed(SurfaceHolder holder) {
 		// TODO Auto-generated method stub
-	    if (mCamera != null) {
-	        mCamera.release();
-	    }
-	    
-  		if (mHolder != null)
-			mHolder.removeCallback(this);
-  		
-  		mHolder = null;
 	}
 
 }

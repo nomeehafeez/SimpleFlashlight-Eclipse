@@ -16,10 +16,9 @@
         android:layout_centerVertical="true"
         android:layout_centerHorizontal="true"
         android:background="@drawable/ic_toggle_bg"
-        android:checked="false"
+        android:checked="true"
         android:duplicateParentState="false"
-        android:longClickable="false"
-        android:onClick="toggleButton1_onClick" />
+        android:longClickable="false" />
 
     <SurfaceView
         android:id="@+id/preview1"
